@@ -100,7 +100,7 @@ void eth_event_handler(void *arg, esp_event_base_t event_base,
  *  (we could use the same technique for Ethernet and yield better throughput, see ETH_BRIDGE_PROMISCUOUS flag)
  *
  *  This API updates Ethernet frames to swap mac addresses of ESP32 interfaces with those of eth-NIC and AP.
- *  For that we'd have to parse initial DHCP packets (manually) to record the HW addresses of the AP and eth-NIC
+ *  Learn the single wired client's MAC from its outgoing frames and learn the AP's MAC from DHCP offers.
  *  (note, that it is possible to simply spoof the MAC addresses, but that's not recommended technique)
  */
 #define IP_V4 0x40
@@ -146,7 +146,7 @@ static void update_udp_checksum(uint16_t *udp_header, uint16_t* ip_header)
 
 void mac_spoof(mac_spoof_direction_t direction, uint8_t *buffer, uint16_t len, uint8_t own_mac[6])
 {
-    if (!s_ethernet_is_connected) {
+    if (!s_ethernet_is_connected || len < 14) {
         return;
     }
     static uint8_t eth_nic_mac[6] = {};
@@ -158,6 +158,13 @@ void mac_spoof(mac_spoof_direction_t direction, uint8_t *buffer, uint16_t len, u
     uint8_t *dest_mac = buffer;
     uint8_t *src_mac = buffer + 6;
     uint8_t *eth_type = buffer + 12;
+    if (direction == FROM_WIRED && len >= 14 && (src_mac[0] & 1) == 0 &&
+        memcmp(src_mac, s_eth_mac, 6) != 0 &&
+        (!eth_nic_mac_found || memcmp(src_mac, eth_nic_mac, 6) != 0)) {
+        memcpy(eth_nic_mac, src_mac, 6);
+        eth_nic_mac_found = true;
+        ESP_LOGI(TAG, "Ethernet client MAC learned or changed");
+    }
     if (eth_type[0] == 0x08) {      // support only IPv4
         // try to find NIC HW address (look for DHCP discovery packet)
         if ( (!eth_nic_mac_found || (MODIFY_DHCP_MSGS)) && direction == FROM_WIRED && eth_type[1] == 0x00) {  // ETH IP4
