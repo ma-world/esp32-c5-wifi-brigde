@@ -12,7 +12,7 @@ The GPIO numbers refer to the labels on the **Waveshare board**. Connect the W55
 | `GPIO3` | `CS` / `SCSn` | Chip select |
 | `GPIO4` | `INT` / `INTn` | Interrupt |
 | `GPIO24` | `RST` / `RSTn` | Reset |
-| W5500 RJ45 | UniFi Express **WAN** | Ethernet cable |
+| W5500 RJ45 | Ethernet device **LAN** | Ethernet cable |
 
 `*` **Before applying power**, check the supply label on your exact W5500 module. Connect a pin marked `3.3V` only to 3.3 V. If the module explicitly has a regulated `5V` input, follow its documentation. Never apply 5 V directly to a C5 GPIO. Both boards must share ground.
 
@@ -22,7 +22,7 @@ Hotel Wi-Fi (2.4 or 5 GHz)
    Waveshare ESP32-C5
        │  SPI + 3.3 V + GND
        ▼
-   W5500 module ── RJ45 cable ──► UniFi Express WAN
+   W5500 module ── RJ45 cable ──► Ethernet device LAN
 ~~~
 
 GPIO8, GPIO9 and GPIO10 are next to each other on the left Waveshare header. GPIO3 is farther up on the left; GPIO4 and GPIO24 are on the right. **BOOT** is the board's built-in button on GPIO28 and needs no extra wire. Waveshare uses GPIO6 and GPIO15 on the board, so this project does not use them. Configure Wi-Fi through the `Wifi2Eth_XXXXXX` hotspot with the current test password `esp32_eth` at **http://192.168.44.1/**.
