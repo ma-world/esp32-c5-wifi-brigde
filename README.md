@@ -29,6 +29,22 @@ python3 -m esptool --chip esp32c5 -p /dev/cu.YOUR_PORT write_flash \
 
 The wiring is documented in [WIRING.md](WIRING.md).
 
+## Automated GitHub releases
+
+Push a Git tag whose name contains the case-sensitive word `Release`, for example:
+
+~~~sh
+git tag Release-v1.0.0
+git push origin Release-v1.0.0
+~~~
+
+The [release workflow](.github/workflows/release.yml) builds the tagged commit with ESP-IDF 5.5.3 and publishes two binary assets on the corresponding GitHub Release:
+
+- `esp32-c5-wifi-brigde-factory.bin`: complete image for USB flashing at offset `0x0`. This overwrites NVS and clears saved Wi-Fi settings.
+- `esp32-c5-wifi-brigde-app.bin`: application-only image for the setup page's firmware uploader. It preserves saved Wi-Fi settings and requires the OTA partition table installed by the factory image or an earlier USB flash.
+
+Binary files are release assets; they are not committed to the source repository.
+
 ## Wi-Fi setup
 
 1. On first boot, connect to **`Wifi2Eth_XXXXXX`**. The final characters come from the C5 MAC address. The current proof-of-concept hotspot password is **`esp32_eth`**. The hotspot runs on 2.4 GHz.
