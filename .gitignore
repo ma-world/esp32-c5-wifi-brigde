@@ -1,0 +1,17 @@
+# Local ESP-IDF output and generated settings
+/build/
+/managed_components/
+/sdkconfig
+/sdkconfig.old
+/dependencies.lock
+
+# Firmware and other compiled artifacts
+*.bin
+*.elf
+*.map
+*.hex
+
+# Local editor and OS files
+.DS_Store
+.vscode/
+.idea/

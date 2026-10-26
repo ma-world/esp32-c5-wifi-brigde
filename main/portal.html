@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Set up Wifi2Eth</title>
+<style>
+  body{font:17px system-ui,sans-serif;max-width:34rem;margin:2rem auto;padding:1rem;color:#182232}
+  h1{font-size:1.65rem} h2{font-size:1.25rem;margin-top:2.5rem}
+  label{display:block;margin-top:1rem;font-weight:600}
+  input,select,button{font:inherit;box-sizing:border-box;width:100%;padding:.75rem;margin-top:.4rem}
+  input,select{border:1px solid #aeb8c7;border-radius:.4rem;background:white}
+  button{border:0;border-radius:.4rem;background:#1754a6;color:white;cursor:pointer}
+  button:disabled{opacity:.6;cursor:wait} button.secondary{background:#e7edf6;color:#18365c}
+  .status{min-height:1.6rem;color:#44566e} small{color:#566579}
+  progress{width:100%;margin-top:.8rem}
+</style>
+<label for="language" data-i18n="language">Language</label>
+<select id="language"><option value="en">English</option><option value="de">Deutsch</option></select>
+<h1 data-i18n="heading">Connect to Wi-Fi</h1>
+<p data-i18n="intro">Choose a network or enter its name yourself.</p>
+<label for="networks" data-i18n="nearby">Nearby Wi-Fi networks</label>
+<select id="networks" aria-describedby="status"><option>Scanning …</option></select>
+<button type="button" class="secondary" id="refresh" data-i18n="refresh">Scan again</button>
+<p id="status" class="status" role="status">Scanning …</p>
+<form method="post" action="/connect">
+  <input type="hidden" id="form-language" name="lang" value="en">
+  <label for="ssid" data-i18n="ssid">Wi-Fi name</label>
+  <input id="ssid" name="ssid" required maxlength="32" autocomplete="off">
+  <label for="password" data-i18n="password">Wi-Fi password</label>
+  <input id="password" name="password" type="password" maxlength="63" autocomplete="off">
+  <small data-i18n="openNetwork">Leave the password blank for an open network.</small>
+  <button type="submit" data-i18n="connect">Connect</button>
+</form>
+<h2 data-i18n="firmwareHeading">Update firmware</h2>
+<p data-i18n="firmwareInfo">Select an ESP32-C5 application .bin file. The bridge will restart after a successful update.</p>
+<label for="firmware" data-i18n="firmwareFile">Firmware file</label>
+<input id="firmware" type="file" accept=".bin,application/octet-stream">
+<button type="button" id="upload" data-i18n="upload">Upload and install</button>
+<progress id="progress" max="100" value="0" hidden></progress>
+<p id="update-status" class="status" role="status"></p>
+<small data-i18n="localHttp">This setup page uses local HTTP on the Wifi2Eth hotspot.</small>
+<script>
+const translations={
+  en:{
+    title:'Set up Wifi2Eth',language:'Language',heading:'Connect to Wi-Fi',
+    intro:'Choose a network or enter its name yourself.',nearby:'Nearby Wi-Fi networks',
+    refresh:'Scan again',ssid:'Wi-Fi name',password:'Wi-Fi password',
+    openNetwork:'Leave the password blank for an open network.',connect:'Connect',
+    firmwareHeading:'Update firmware',
+    firmwareInfo:'Select an ESP32-C5 application .bin file. The bridge will restart after a successful update.',
+    firmwareFile:'Firmware file',upload:'Upload and install',
+    localHttp:'This setup page uses local HTTP on the Wifi2Eth hotspot.',
+    scanning:'Scanning …',choose:'Choose a Wi-Fi network',manual:'Enter a Wi-Fi name manually',
+    found:n=>n+' Wi-Fi networks found',none:'No networks found. Enter the name manually if needed.',
+    scanFailed:'Scan failed. Enter the Wi-Fi name manually or scan again.',
+    chooseFile:'Choose a .bin firmware file first.',tooLarge:'The firmware file exceeds the 2 MB update partition.',
+    uploading:n=>'Uploading: '+n+'%',installing:'Upload complete. Installing firmware …',
+    installed:'Update installed. The bridge is restarting.',
+    updateFailed:'Update failed. Check that this is an ESP32-C5 application .bin file and try again.'
+  },
+  de:{
+    title:'Wifi2Eth einrichten',language:'Sprache',heading:'Mit WLAN verbinden',
+    intro:'WLAN aus der Liste wählen oder den Namen selbst eingeben.',nearby:'WLANs in der Nähe',
+    refresh:'Erneut suchen',ssid:'WLAN-Name',password:'WLAN-Passwort',
+    openNetwork:'Bei einem offenen WLAN das Passwortfeld leer lassen.',connect:'Verbinden',
+    firmwareHeading:'Firmware aktualisieren',
+    firmwareInfo:'Eine ESP32-C5-Anwendungsdatei (.bin) auswählen. Nach erfolgreichem Update startet die Bridge neu.',
+    firmwareFile:'Firmwaredatei',upload:'Hochladen und installieren',
+    localHttp:'Diese Einrichtungsseite nutzt lokales HTTP im Wifi2Eth-Hotspot.',
+    scanning:'Suche läuft …',choose:'WLAN auswählen',manual:'WLAN manuell eingeben',
+    found:n=>n+' WLANs gefunden',none:'Keine WLANs gefunden. Namen bei Bedarf selbst eingeben.',
+    scanFailed:'Suche fehlgeschlagen. WLAN-Namen selbst eingeben oder erneut suchen.',
+    chooseFile:'Zuerst eine .bin-Firmwaredatei auswählen.',tooLarge:'Die Firmwaredatei überschreitet die 2-MB-Updatepartition.',
+    uploading:n=>'Hochladen: '+n+'%',installing:'Upload abgeschlossen. Firmware wird installiert …',
+    installed:'Update installiert. Die Bridge startet neu.',
+    updateFailed:'Update fehlgeschlagen. ESP32-C5-Anwendungsdatei (.bin) prüfen und erneut versuchen.'
+  }
+};
+const language=document.getElementById('language');
+const list=document.getElementById('networks');
+const status=document.getElementById('status');
+const ssid=document.getElementById('ssid');
+const refresh=document.getElementById('refresh');
+const updateStatus=document.getElementById('update-status');
+const upload=document.getElementById('upload');
+const fileInput=document.getElementById('firmware');
+const progress=document.getElementById('progress');
+let scanState='scanning',networkCount=0;
+function words(){return translations[language.value]}
+function showScanState(){
+  const t=words();
+  status.textContent=scanState==='found'?t.found(networkCount):t[scanState];
+  if(list.options.length&&!list.options[0].value)
+    list.options[0].textContent=scanState==='found'?t.choose:scanState==='scanning'?t.scanning:t.manual;
+}
+function setLanguage(value){
+  language.value=value==='de'?'de':'en';
+  document.documentElement.lang=language.value;
+  document.title=words().title;
+  document.getElementById('form-language').value=language.value;
+  for(const element of document.querySelectorAll('[data-i18n]'))
+    element.textContent=words()[element.dataset.i18n];
+  showScanState();
+  try{localStorage.setItem('wifi2eth-language',language.value)}catch(_){}
+}
+let savedLanguage='en';
+try{savedLanguage=localStorage.getItem('wifi2eth-language')||'en'}catch(_){}
+setLanguage(savedLanguage);
+language.addEventListener('change',()=>setLanguage(language.value));
+list.addEventListener('change',()=>{if(list.value)ssid.value=list.value});
+async function scan(){
+  refresh.disabled=true;list.disabled=true;scanState='scanning';showScanState();
+  try{
+    const response=await fetch('/api/networks',{cache:'no-store'});
+    if(!response.ok)throw new Error('scan_failed');
+    const found=await response.json();
+    list.replaceChildren(new Option(words().choose,''));
+    for(const item of found){
+      const bytes=item.hex.match(/../g).map(pair=>parseInt(pair,16));
+      const name=new TextDecoder().decode(new Uint8Array(bytes));
+      list.add(new Option(name+' · '+item.band+' · '+item.rssi+' dBm',name));
+    }
+    networkCount=found.length;scanState=found.length?'found':'none';
+  }catch(_){list.replaceChildren(new Option(words().manual,''));scanState='scanFailed'}
+  finally{showScanState();list.disabled=false;refresh.disabled=false}
+}
+refresh.addEventListener('click',scan);
+upload.addEventListener('click',()=>{
+  const file=fileInput.files[0];
+  if(!file||!file.name.toLowerCase().endsWith('.bin')){updateStatus.textContent=words().chooseFile;return}
+  if(file.size>2*1024*1024){updateStatus.textContent=words().tooLarge;return}
+  upload.disabled=true;progress.hidden=false;progress.value=0;
+  const request=new XMLHttpRequest();
+  request.open('POST','/api/firmware');
+  request.setRequestHeader('Content-Type','application/octet-stream');
+  request.upload.onprogress=event=>{
+    if(event.lengthComputable){
+      progress.value=Math.round(event.loaded*100/event.total);
+      updateStatus.textContent=words().uploading(progress.value);
+    }
+  };
+  request.upload.onload=()=>{updateStatus.textContent=words().installing};
+  request.onload=()=>{
+    updateStatus.textContent=request.status===200?words().installed:words().updateFailed;
+    upload.disabled=false;
+  };
+  request.onerror=request.ontimeout=()=>{
+    updateStatus.textContent=words().updateFailed;upload.disabled=false;
+  };
+  request.send(file);
+});
+scan();
+</script>
+</html>
